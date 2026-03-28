@@ -43,7 +43,13 @@ export const typeDefs = `
   type User {
     id: ID!
     name: String!
+    username: String!
     entries: [GameEntry!]!
+  }
+
+  type AuthPayload {
+    token: String!
+    user: User!
   }
 
   type Query {
@@ -52,9 +58,21 @@ export const typeDefs = `
     entries(userId: ID!): [GameEntry!]!
     entry(id: ID!): GameEntry
     user(id: ID!): User
+    me: User
   }
 
   type Mutation {
+    register(
+      name: String!
+      username: String!
+      password: String!
+    ): AuthPayload!
+
+    login(
+      username: String!
+      password: String!
+    ): AuthPayload!
+
     addGame(
       title: String!
       description: String!

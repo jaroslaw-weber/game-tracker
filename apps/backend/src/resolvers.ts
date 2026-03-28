@@ -8,9 +8,28 @@ export const resolvers = {
     entries: (_: unknown, { userId }: { userId: string }) => dataStore.getEntries(userId),
     entry: (_: unknown, { id }: { id: string }) => dataStore.getEntry(id),
     user: (_: unknown, { id }: { id: string }) => dataStore.getUser(id),
+    me: (_: unknown, __: unknown, context: { userId?: string }) => {
+      if (!context.userId) throw new Error('Not authenticated');
+      return dataStore.getUser(context.userId);
+    },
   },
 
   Mutation: {
+    register: async (_: unknown, { name, username, password }: { 
+      name: string; 
+      username: string; 
+      password: string;
+    }) => {
+      return dataStore.register(name, username, password);
+    },
+
+    login: async (_: unknown, { username, password }: { 
+      username: string; 
+      password: string;
+    }) => {
+      return dataStore.login(username, password);
+    },
+
     addGame: (_: unknown, { title, description, coverUrl, tags }: { 
       title: string; 
       description: string; 
@@ -18,12 +37,10 @@ export const resolvers = {
       tags: string[];
     }) => {
       const game = {
-        id: `game-${Date.now()}`,
         title,
         description,
         coverUrl,
         tags,
-        media: []
       };
       return dataStore.addGame(game);
     },
@@ -35,7 +52,6 @@ export const resolvers = {
       thumbnailUrl?: string;
     }) => {
       const media = {
-        id: `media-${Date.now()}`,
         gameId,
         type: type as MediaType,
         url,
@@ -51,14 +67,9 @@ export const resolvers = {
       progress?: number;
       rating?: number;
     }) => {
-      const game = dataStore.getGame(gameId);
-      if (!game) throw new Error('Game not found');
-
       const entry = {
-        id: `entry-${Date.now()}`,
         userId,
         gameId,
-        game,
         status: status as GameStatus,
         progress,
         rating

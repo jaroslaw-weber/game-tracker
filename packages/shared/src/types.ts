@@ -42,5 +42,11 @@ export interface GameEntry {
 export interface User {
   id: string;
   name: string;
+  username: string;
   entries: GameEntry[];
+}
+
+export interface AuthPayload {
+  token: string;
+  user: User;
 }
