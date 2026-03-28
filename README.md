@@ -1,301 +1,98 @@
-# game-tracker
-my example graphql project for tracking and wishlisting games locally
+# Game Tracker
 
----
+A full-stack GraphQL app for tracking games and deciding what to play next.
 
-## Project Concept: Media-First Game Wishlist & "What to Play Next" App
+## Core Concept
 
-### 1. Overview
+**Media-first game wishlist & backlog tracker** - helps users visually explore their game library and decide what to play next.
 
-This is a **full-stack web app** that helps users:
+### Key Features
 
-* track games they've played
-* manage a wishlist / backlog
-* **decide what to play next**
+- 🎮 **Game Management**: Track games with status (Wishlist, Backlog, Playing, Completed, Dropped), progress %, and ratings
+- 🎥 **Media-First UI**: Browse games with trailers, gameplay clips, and screenshots
+- 🏷 **Tagging**: Filter games by tags (e.g., "cozy", "challenging", "multiplayer")
+- 🔐 **Authentication**: Secure login/register with JWT tokens
 
-The core differentiator:
-**media-first browsing (trailers, gameplay, images)**
-**decision-focused UX (not just tracking)**
+## Tech Stack
 
-Instead of just listing games, the app helps users **visually compare games** and choose their next one.
+- **Runtime**: Bun
+- **Backend**: Apollo Server, GraphQL, SQLite (bun:sqlite)
+- **Frontend**: Astro, React, Apollo Client
+- **Authentication**: bcryptjs, jsonwebtoken
 
----
+## Project Structure
 
-### 2. Core Value Proposition
+```
+game-tracker/
+├── apps/
+│   ├── backend/          # Apollo Server + GraphQL + SQLite
+│   └── frontend/         # Astro + React + Apollo Client
+├── packages/
+│   └── shared/           # Shared types and GraphQL schema
+└── package.json          # Bun workspace configuration
+```
 
-Most trackers (like backlog apps) focus on:
+## Getting Started
 
-* storing lists
-* tracking completion
+### Prerequisites
 
-This app focuses on:
+- [Bun](https://bun.sh/) installed
 
-* **decision making**
-* **visual discovery**
-* **reducing choice paralysis**
+### Installation
 
-> "I have 50 games. What should I play next?"
+```bash
+# Install dependencies
+bun install
 
----
+# Set up environment variables
+cd apps/backend
+cp .env.example .env
+# Edit .env and set a secure JWT_SECRET
 
-### 3. Key Features
+# Build shared package
+cd ../../packages/shared
+bun run build
 
-#### Game Management
+# Start development servers (from root)
+cd ../..
+bun run dev
+```
 
-* Add game to:
+This starts:
+- Backend: http://localhost:4000 (GraphQL Playground)
+- Frontend: http://localhost:3000
 
-  * Wishlist
-  * Backlog
-  * Playing
-  * Completed
-* Track:
+## Demo Credentials
 
-  * progress (%)
-  * rating
-  * play status
+- Username: `player1`
+- Password: `password123`
 
----
+## Scripts
 
-#### Media-First UI (Main Feature)
+- `bun run dev` - Start all dev servers
+- `bun run dev:backend` - Start backend only
+- `bun run dev:frontend` - Start frontend only
+- `bun run build` - Build all packages
+- `bun run typecheck` - Run TypeScript checks
 
-Each game has 3 viewing modes:
-
-* **Trailer mode**
-
-  * shows official trailers (YouTube embeds)
-
-* **Gameplay mode**
-
-  * shows raw gameplay clips
-
-* **Image mode**
-
-  * shows screenshots (carousel/grid)
-
-Users can switch modes globally or per game.
-
----
-
-#### "What to Play Next" Focus
-
-Special UX for decision making:
-
-* shortlist / "consider next" state
-* compare games visually
-* filter by:
-
-  * tags (e.g. "short", "relaxing", "story-rich")
-  * platform
-  * estimated time (later)
-* sort by:
-
-  * last updated
-  * rating
-  * progress
-
----
-
-#### Tags & Discovery
-
-* predefined or user-generated tags
-* examples:
-
-  * "cozy"
-  * "grindy"
-  * "story heavy"
-  * "multiplayer"
-
-Used for filtering and narrowing choices.
-
----
-
-#### User Tracking
-
-* personal game entries
-* stats:
-
-  * total games
-  * completed
-  * backlog
-  * wishlist
-
----
-
-### 4. Core UX Flow
-
-#### Flow 1: Add & Track
-
-1. User searches game
-2. Adds to wishlist
-3. Later moves to:
-
-   * backlog → playing → completed
-
----
-
-#### Flow 2: Decide What to Play
-
-1. User opens backlog
-2. switches media mode (trailer/gameplay/images)
-3. browses visually
-4. filters by tags/platform
-5. picks one → sets to "playing"
-
----
-
-#### Flow 3: Track Progress
-
-1. update progress %
-2. optionally rate
-3. mark completed
-
----
-
-### 5. GraphQL Design Philosophy
-
-GraphQL is used because:
-
-* frontend needs **different data per mode**
-* avoids overfetching media
-* enables flexible UI
-
-#### Example:
-
-**Image mode query**
+## GraphQL Example
 
 ```graphql
-games {
-  id
-  title
-  coverUrl
-  media(type: IMAGE) {
-    url
+# Login
+mutation {
+  login(username: "player1", password: "password123") {
+    token
+    user { id name }
+  }
+}
+
+# Get entries
+query {
+  entries(userId: "user-1") {
+    id
+    status
+    progress
+    game { title coverUrl }
   }
 }
 ```
-
-**Trailer mode query**
-
-```graphql
-games {
-  id
-  title
-  media(type: TRAILER) {
-    url
-  }
-}
-```
-
----
-
-### 6. Data Model (Simplified)
-
-#### Game
-
-* id
-* title
-* description
-* coverUrl
-* tags
-
-#### Media
-
-* id
-* gameId
-* type: TRAILER | GAMEPLAY | IMAGE
-* url
-* thumbnailUrl
-
-#### GameEntry (core table)
-
-* id
-* userId
-* gameId
-* status:
-
-  * WISHLIST
-  * BACKLOG
-  * PLAYING
-  * COMPLETED
-  * DROPPED
-* progress
-* rating
-
-#### Tag
-
-* id
-* name
-
----
-
-### 7. Tech Stack
-
-#### Backend
-
-* Node.js + TypeScript
-* Apollo Server (GraphQL)
-* Prisma + PostgreSQL
-
-#### Frontend
-
-* React + TypeScript
-* Apollo Client
-* Tailwind
-
----
-
-### 8. Key Learning Goals
-
-This project is designed to learn:
-
-#### GraphQL
-
-* schema design
-* resolvers
-* nested relationships
-* filtering & arguments
-* enums
-* media-based queries
-
-#### Apollo Client
-
-* queries & mutations
-* cache updates
-* fragments
-* UI state handling
-
-#### Full-stack TypeScript
-
-* shared types mindset
-* end-to-end data safety
-
----
-
-### 9. MVP Scope
-
-Keep it small:
-
-* add game
-* change status
-* 3 media modes
-* basic filtering
-* simple UI (grid + details page)
-
-No auth needed at first (mock user is fine).
-
----
-
-### 10. Possible Extensions
-
-* "compare games" view
-* recommendation system
-* time-to-beat integration
-* friend activity
-* AI "what should I play next?" assistant
-
----
-
-### 11. One-line Summary
-
-> A media-first game tracker that helps users visually explore their backlog and decide what to play next.
-

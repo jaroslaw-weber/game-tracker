@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import { Database } from 'bun:sqlite';
 import { Game, GameEntry, Media, User, GameStatus, MediaType, AuthPayload } from '@game-tracker/shared';
 import { randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
