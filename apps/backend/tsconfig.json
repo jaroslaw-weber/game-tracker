@@ -11,7 +11,8 @@
     "baseUrl": ".",
     "paths": {
       "@game-tracker/shared": ["../../packages/shared/src"]
-    }
+    },
+    "types": ["bun-types"]
   },
   "include": ["src/**/*"]
 }

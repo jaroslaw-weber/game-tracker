@@ -10,6 +10,10 @@ const GET_GAMES = gql`
       description
       coverUrl
       tags
+      media {
+        type
+        url
+      }
     }
   }
 `;
@@ -24,8 +28,10 @@ const GET_ENTRIES = gql`
         description
         coverUrl
         tags
-        media(type: IMAGE) {
+        media {
+          type
           url
+          thumbnailUrl
         }
       }
       status
@@ -56,6 +62,12 @@ const UPDATE_ENTRY = gql`
   }
 `;
 
+const DELETE_ENTRY = gql`
+  mutation DeleteEntry($id: ID!) {
+    deleteEntry(id: $id)
+  }
+`;
+
 const ME = gql`
   query Me {
     me {
@@ -69,7 +81,8 @@ const ME = gql`
 export function GameList() {
   const [activeTab, setActiveTab] = useState<'games' | 'entries'>('entries');
   const [selectedStatus, setSelectedStatus] = useState<GameStatus | 'ALL'>('ALL');
-  const [mediaMode, setMediaMode] = useState<MediaMode>('IMAGE');
+  const [mediaMode, setMediaMode] = useState<MediaType>('IMAGE');
+  const [addingGames, setAddingGames] = useState<Record<string, 'wishlist' | 'playing' | null>>({});
 
   const { data: meData } = useQuery(ME);
   const userId = meData?.me?.id;
@@ -82,21 +95,72 @@ export function GameList() {
 
   const [addEntry] = useMutation(ADD_ENTRY);
   const [updateEntry] = useMutation(UPDATE_ENTRY);
+  const [deleteEntry] = useMutation(DELETE_ENTRY);
 
-  const handleAddToBacklog = async (gameId: string) => {
+  const handleDeleteEntry = async (entryId: string) => {
+    if (!confirm('Are you sure you want to remove this game from your collection?')) return;
+    try {
+      await deleteEntry({
+        variables: { id: entryId },
+      });
+      refetchEntries();
+    } catch (err) {
+      console.error('Error deleting entry:', err);
+      alert('Failed to remove game from collection');
+    }
+  };
+
+  const handleAddToWishlist = async (gameId: string) => {
     if (!userId) return;
+    setAddingGames(prev => ({ ...prev, [gameId]: 'wishlist' }));
     try {
       await addEntry({
         variables: {
           userId,
           gameId,
-          status: GameStatus.BACKLOG,
+          status: GameStatus.WISHLIST,
           progress: 0,
         },
       });
       refetchEntries();
-    } catch (err) {
-      console.error('Error adding entry:', err);
+    } catch (err: any) {
+      if (err.message?.includes('already exists')) {
+        alert('This game is already in your collection!');
+      } else {
+        console.error('Error adding entry:', err);
+        alert('Failed to add game to wishlist');
+      }
+    } finally {
+      setTimeout(() => {
+        setAddingGames(prev => ({ ...prev, [gameId]: null }));
+      }, 1000);
+    }
+  };
+
+  const handleAddToPlayed = async (gameId: string) => {
+    if (!userId) return;
+    setAddingGames(prev => ({ ...prev, [gameId]: 'playing' }));
+    try {
+      await addEntry({
+        variables: {
+          userId,
+          gameId,
+          status: GameStatus.PLAYING,
+          progress: 0,
+        },
+      });
+      refetchEntries();
+    } catch (err: any) {
+      if (err.message?.includes('already exists')) {
+        alert('This game is already in your collection!');
+      } else {
+        console.error('Error adding entry:', err);
+        alert('Failed to add game to playing');
+      }
+    } finally {
+      setTimeout(() => {
+        setAddingGames(prev => ({ ...prev, [gameId]: null }));
+      }, 1000);
     }
   };
 
@@ -108,17 +172,6 @@ export function GameList() {
       refetchEntries();
     } catch (err) {
       console.error('Error updating entry:', err);
-    }
-  };
-
-  const handleUpdateProgress = async (entryId: string, progress: number) => {
-    try {
-      await updateEntry({
-        variables: { id: entryId, progress },
-      });
-      refetchEntries();
-    } catch (err) {
-      console.error('Error updating progress:', err);
     }
   };
 
@@ -200,16 +253,60 @@ export function GameList() {
             ))}
           </div>
 
+          <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+            <span style={{ padding: '0.5rem 1rem', color: '#aaa' }}>View:</span>
+            <button
+              onClick={() => setMediaMode('IMAGE')}
+              style={{
+                padding: '0.5rem 1rem',
+                background: mediaMode === 'IMAGE' ? 'rgb(var(--accent))' : '#333',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+              }}
+            >
+              Image
+            </button>
+            <button
+              onClick={() => setMediaMode('TRAILER')}
+              style={{
+                padding: '0.5rem 1rem',
+                background: mediaMode === 'TRAILER' ? 'rgb(var(--accent))' : '#333',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+              }}
+            >
+              Trailer
+            </button>
+            <button
+              onClick={() => setMediaMode('GAMEPLAY')}
+              style={{
+                padding: '0.5rem 1rem',
+                background: mediaMode === 'GAMEPLAY' ? 'rgb(var(--accent))' : '#333',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+              }}
+            >
+              Gameplay
+            </button>
+          </div>
+
           {entriesLoading ? (
             <p>Loading...</p>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.5rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: mediaMode === 'IMAGE' ? 'repeat(auto-fill, minmax(200px, 1fr))' : 'repeat(auto-fill, minmax(400px, 1fr))', gap: '1.5rem' }}>
               {filteredEntries?.map((entry: any) => (
                 <GameCard
                   key={entry.id}
                   entry={entry}
+                  mediaMode={mediaMode}
                   onUpdateStatus={handleUpdateStatus}
-                  onUpdateProgress={handleUpdateProgress}
+                  onDeleteEntry={handleDeleteEntry}
                 />
               ))}
             </div>
@@ -219,59 +316,137 @@ export function GameList() {
 
       {activeTab === 'games' && (
         <div>
+          <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+            <span style={{ padding: '0.5rem 1rem', color: '#aaa' }}>View:</span>
+            <button
+              onClick={() => setMediaMode('IMAGE')}
+              style={{
+                padding: '0.5rem 1rem',
+                background: mediaMode === 'IMAGE' ? 'rgb(var(--accent))' : '#333',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+              }}
+            >
+              Image
+            </button>
+            <button
+              onClick={() => setMediaMode('TRAILER')}
+              style={{
+                padding: '0.5rem 1rem',
+                background: mediaMode === 'TRAILER' ? 'rgb(var(--accent))' : '#333',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+              }}
+            >
+              Trailer
+            </button>
+            <button
+              onClick={() => setMediaMode('GAMEPLAY')}
+              style={{
+                padding: '0.5rem 1rem',
+                background: mediaMode === 'GAMEPLAY' ? 'rgb(var(--accent))' : '#333',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+              }}
+            >
+              Gameplay
+            </button>
+          </div>
+
           {gamesLoading ? (
             <p>Loading...</p>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.5rem' }}>
-              {gamesData?.games?.map((game: any) => (
-                <div
-                  key={game.id}
-                  style={{
-                    background: '#1a1a2e',
-                    borderRadius: '8px',
-                    overflow: 'hidden',
-                    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)',
-                  }}
-                >
-                  <img
-                    src={game.coverUrl}
-                    alt={game.title}
-                    style={{ width: '100%', height: '200px', objectFit: 'cover' }}
-                  />
-                  <div style={{ padding: '1rem' }}>
-                    <h3 style={{ margin: '0 0 0.5rem 0' }}>{game.title}</h3>
-                    <p style={{ fontSize: '0.875rem', color: '#aaa', marginBottom: '1rem' }}>
-                      {game.description}
-                    </p>
-                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-                      {game.tags.map((tag: string) => (
-                        <span
-                          key={tag}
-                          style={{
-                            fontSize: '0.75rem',
-                            padding: '0.25rem 0.5rem',
-                            background: '#333',
-                            borderRadius: '4px',
-                          }}
-                        >
-                          {tag}
-                        </span>
-                      ))}
+            <div style={{ display: 'grid', gridTemplateColumns: mediaMode === 'IMAGE' ? 'repeat(auto-fill, minmax(200px, 1fr))' : 'repeat(auto-fill, minmax(400px, 1fr))', gap: '1.5rem' }}>
+              {gamesData?.games?.map((game: any) => {
+                const isVideo = mediaMode === 'TRAILER' || mediaMode === 'GAMEPLAY';
+                const mediaItem = game.media?.find((m: any) => m.type === mediaMode);
+                const mediaUrl = isVideo ? mediaItem?.url : game.coverUrl;
+                
+                return (
+                  <div
+                    key={game.id}
+                    style={{
+                      background: '#1a1a2e',
+                      borderRadius: '8px',
+                      overflow: 'hidden',
+                      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)',
+                    }}
+                  >
+                    {isVideo && mediaUrl ? (
+                      <iframe
+                        src={mediaUrl}
+                        title={`${game.title} ${mediaMode.toLowerCase()}`}
+                        style={{ width: '100%', aspectRatio: '16/9', border: 'none' }}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    ) : (
+                      <img
+                        src={game.coverUrl}
+                        alt={game.title}
+                        style={{ width: '100%', aspectRatio: '2/3', objectFit: 'cover' }}
+                      />
+                    )}
+                    <div style={{ padding: '1rem' }}>
+                      <h3 style={{ margin: '0 0 0.5rem 0' }}>{game.title}</h3>
+                      <p style={{ fontSize: '0.875rem', color: '#aaa', marginBottom: '1rem' }}>
+                        {game.description}
+                      </p>
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+                        {game.tags.map((tag: string) => (
+                          <span
+                            key={tag}
+                            style={{
+                              fontSize: '0.75rem',
+                              padding: '0.25rem 0.5rem',
+                              background: '#333',
+                              borderRadius: '4px',
+                            }}
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button
+                        onClick={() => handleAddToWishlist(game.id)}
+                        disabled={addingGames[game.id] !== undefined}
+                        style={{
+                          flex: 1,
+                          padding: '0.5rem',
+                          background: addingGames[game.id] === 'wishlist' ? '#666' : '#ff9800',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: addingGames[game.id] !== undefined ? 'not-allowed' : 'pointer',
+                          opacity: addingGames[game.id] !== undefined ? 0.7 : 1,
+                        }}
+                      >
+                        {addingGames[game.id] === 'wishlist' ? 'Added!' : 'Wishlist'}
+                      </button>
+                      <button
+                        onClick={() => handleAddToPlayed(game.id)}
+                        disabled={addingGames[game.id] !== undefined}
+                        style={{
+                          flex: 1,
+                          padding: '0.5rem',
+                          background: addingGames[game.id] === 'playing' ? '#666' : '#4caf50',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: addingGames[game.id] !== undefined ? 'not-allowed' : 'pointer',
+                          opacity: addingGames[game.id] !== undefined ? 0.7 : 1,
+                        }}
+                      >
+                        {addingGames[game.id] === 'playing' ? 'Added!' : 'Playing'}
+                      </button>
                     </div>
-                    <button
-                      onClick={() => handleAddToBacklog(game.id)}
-                      style={{
-                        width: '100%',
-                        padding: '0.5rem',
-                        background: '#2196f3',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Add to Backlog
-                    </button>
                   </div>
                 </div>
               ))}
@@ -285,14 +460,12 @@ export function GameList() {
 
 interface GameCardProps {
   entry: any;
+  mediaMode: MediaType;
   onUpdateStatus: (entryId: string, status: GameStatus) => void;
-  onUpdateProgress: (entryId: string, progress: number) => void;
+  onDeleteEntry: (entryId: string) => void;
 }
 
-function GameCard({ entry, onUpdateStatus, onUpdateProgress }: GameCardProps) {
-  const [isEditingProgress, setIsEditingProgress] = useState(false);
-  const [progressValue, setProgressValue] = useState(entry.progress);
-
+function GameCard({ entry, mediaMode, onUpdateStatus, onDeleteEntry }: GameCardProps) {
   const statusColors: Record<GameStatus, string> = {
     [GameStatus.WISHLIST]: '#ff9800',
     [GameStatus.BACKLOG]: '#2196f3',
@@ -301,10 +474,15 @@ function GameCard({ entry, onUpdateStatus, onUpdateProgress }: GameCardProps) {
     [GameStatus.DROPPED]: '#f44336',
   };
 
-  const handleProgressSubmit = () => {
-    onUpdateProgress(entry.id, progressValue);
-    setIsEditingProgress(false);
+  const getMediaUrl = () => {
+    if (mediaMode === 'IMAGE') {
+      return entry.game.coverUrl;
+    }
+    const media = entry.game.media?.find((m: any) => m.type === mediaMode);
+    return media?.url || entry.game.coverUrl;
   };
+
+  const isVideo = mediaMode === 'TRAILER' || mediaMode === 'GAMEPLAY';
 
   return (
     <div
@@ -315,11 +493,21 @@ function GameCard({ entry, onUpdateStatus, onUpdateProgress }: GameCardProps) {
         boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)',
       }}
     >
-      <img
-        src={entry.game.media[0]?.url || entry.game.coverUrl}
-        alt={entry.game.title}
-        style={{ width: '100%', height: '200px', objectFit: 'cover' }}
-      />
+      {isVideo ? (
+        <iframe
+          src={getMediaUrl()}
+          title={`${entry.game.title} ${mediaMode.toLowerCase()}`}
+          style={{ width: '100%', aspectRatio: '16/9', border: 'none' }}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      ) : (
+        <img
+          src={getMediaUrl()}
+          alt={entry.game.title}
+          style={{ width: '100%', aspectRatio: '2/3', objectFit: 'cover' }}
+        />
+      )}
       <div style={{ padding: '1rem' }}>
         <div
           style={{
@@ -352,61 +540,6 @@ function GameCard({ entry, onUpdateStatus, onUpdateProgress }: GameCardProps) {
           ))}
         </div>
 
-        <div style={{ marginBottom: '1rem' }}>
-          {isEditingProgress ? (
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={progressValue}
-                onChange={(e) => setProgressValue(parseInt(e.target.value))}
-                style={{ flex: 1 }}
-              />
-              <span>{progressValue}%</span>
-              <button
-                onClick={handleProgressSubmit}
-                style={{
-                  padding: '0.25rem 0.5rem',
-                  background: '#4caf50',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                }}
-              >
-                ✓
-              </button>
-            </div>
-          ) : (
-            <div
-              onClick={() => setIsEditingProgress(true)}
-              style={{ cursor: 'pointer' }}
-            >
-              Progress: {entry.progress}%
-              <div
-                style={{
-                  width: '100%',
-                  height: '8px',
-                  background: '#333',
-                  borderRadius: '4px',
-                  marginTop: '0.25rem',
-                }}
-              >
-                <div
-                  style={{
-                    width: `${entry.progress}%`,
-                    height: '100%',
-                    background: 'rgb(var(--accent))',
-                    borderRadius: '4px',
-                    transition: 'width 0.3s ease',
-                  }}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
         <select
           value={entry.status}
           onChange={(e) => onUpdateStatus(entry.id, e.target.value as GameStatus)}
@@ -418,6 +551,7 @@ function GameCard({ entry, onUpdateStatus, onUpdateProgress }: GameCardProps) {
             border: '1px solid #444',
             borderRadius: '4px',
             cursor: 'pointer',
+            marginBottom: '0.5rem',
           }}
         >
           {Object.values(GameStatus).map((status) => (
@@ -426,6 +560,22 @@ function GameCard({ entry, onUpdateStatus, onUpdateProgress }: GameCardProps) {
             </option>
           ))}
         </select>
+
+        <button
+          onClick={() => onDeleteEntry(entry.id)}
+          style={{
+            width: '100%',
+            padding: '0.5rem',
+            background: '#f44336',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '0.875rem',
+          }}
+        >
+          Remove
+        </button>
       </div>
     </div>
   );
