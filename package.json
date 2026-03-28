@@ -1,0 +1,21 @@
+{
+  "name": "game-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --cwd apps/backend dev & bun run --cwd apps/frontend dev",
+    "dev:backend": "bun run --cwd apps/backend dev",
+    "dev:frontend": "bun run --cwd apps/frontend dev",
+    "build": "bun run --cwd packages/shared build && bun run --cwd apps/backend build && bun run --cwd apps/frontend build",
+    "lint": "bun run --cwd apps/backend lint && bun run --cwd apps/frontend lint",
+    "typecheck": "bun run --cwd packages/shared typecheck && bun run --cwd apps/backend typecheck && bun run --cwd apps/frontend typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}
